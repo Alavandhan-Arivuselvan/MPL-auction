@@ -5,6 +5,7 @@
   "description": "Real-time WebSocket auction server for Manarpuram Premiere League",
   "main": "index.js",
   "scripts": {
+    "build": "echo 'No build required for server'",
     "start": "node index.js"
   },
   "dependencies": {
