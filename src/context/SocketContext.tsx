@@ -22,7 +22,7 @@ interface SocketContextValue {
   bidHistory: BidRecord[];
   isSubmittingBid: boolean;
   lastBidError: string | null;
-  createRoom: () => Promise<{ success: boolean; roomId?: string }>;
+  createRoom: (teamName: string, logo: string, color: string) => Promise<{ success: boolean; roomId?: string }>;
   joinRoom: (roomId: string, teamName: string, logo: string, color: string) => Promise<{ success: boolean; message?: string }>;
   startAuction: () => void;
   placeBid: (amount?: number) => Promise<{ success: boolean; reason?: string }>;
@@ -196,13 +196,15 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, []);
 
   // Actions
-  const createRoom = () => {
+  const createRoom = (teamName: string, logo: string, color: string) => {
     return new Promise<{ success: boolean; roomId?: string }>((resolve) => {
       if (!socket) return resolve({ success: false });
-      socket.emit('create_room', {}, (res: { success: boolean; roomId?: string }) => {
-        if (res.success && res.roomId) {
+      socket.emit('create_room', { teamName, logo, color }, (res: { success: boolean; roomId?: string; myTeam?: Team; teams?: Team[] }) => {
+        if (res.success && res.roomId && res.myTeam) {
           setRoomId(res.roomId);
           setIsHost(true);
+          setMyTeam(res.myTeam);
+          if (res.teams) setTeams(res.teams);
           setRoomStatus('LOBBY');
           resolve({ success: true, roomId: res.roomId });
         } else {

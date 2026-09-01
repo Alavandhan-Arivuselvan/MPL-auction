@@ -35,7 +35,7 @@ const DEFAULT_OFFICIAL_PLAYERS = [
   // Batsmen (14)
   { id: 'p-13', name: 'Mohamed Russell', rating: 9.1, role: 'Batsman', basePrice: 15000000 },
   { id: 'p-14', name: 'Srinivas', rating: 8.5, role: 'Batsman', basePrice: 10000000 },
-  { id: 'p-15', name: 'Alavandhan', rating: 9.0, role: 'Batsman', basePrice: 15000000 },
+  { id: 'p-15', name: 'Alavandhan', rating: 8.9, role: 'Batsman', basePrice: 15000000 },
   { id: 'p-16', name: 'Nakul', rating: 8.8, role: 'Batsman', basePrice: 10000000 },
   { id: 'p-17', name: 'Ajay Kumar', rating: 7.2, role: 'Batsman', basePrice: 7500000 },
   { id: 'p-18', name: 'Mohamed Salih', rating: 7.4, role: 'Batsman', basePrice: 7500000 },
@@ -126,12 +126,25 @@ io.on('connection', (socket) => {
       ? data.players.map((p) => ({ ...p, isSold: false, isUnsold: false, soldPrice: null, soldTo: null }))
       : DEFAULT_OFFICIAL_PLAYERS.map((p) => ({ ...p, isSold: false, isUnsold: false, soldPrice: null, soldTo: null }));
 
+    const teamId = `team-${socket.id.substring(0, 5)}`;
+    const newTeam = {
+      id: teamId,
+      socketId: socket.id,
+      name: data?.teamName || `Admin Franchise`,
+      shortName: (data?.teamName || `ADM`).substring(0, 3).toUpperCase(),
+      logo: data?.logo || '👑',
+      color: data?.color || '#ffffff',
+      purseRemaining: INITIAL_PURSE,
+      maxPurse: INITIAL_PURSE,
+      players: [],
+    };
+
     const newRoom = {
       roomId,
       hostSocketId: socket.id,
       status: 'LOBBY',
       players,
-      teams: [],
+      teams: [newTeam],
       currentPlayerIndex: 0,
       currentBid: players[0]?.basePrice || 10000000,
       leadingTeamId: null,
@@ -143,12 +156,12 @@ io.on('connection', (socket) => {
 
     rooms.set(roomId, newRoom);
     socket.join(roomId);
-    socket.data = { roomId, isHost: true };
+    socket.data = { roomId, teamId, isHost: true };
 
     console.log(`[Room Created] Room: ${roomId} by Host: ${socket.id}`);
 
     if (typeof callback === 'function') {
-      callback({ success: true, roomId, isHost: true, playerCount: players.length });
+      callback({ success: true, roomId, isHost: true, playerCount: players.length, myTeam: newTeam, teams: newRoom.teams });
     }
 
     socket.emit('room_created', {
@@ -172,6 +185,18 @@ io.on('connection', (socket) => {
 
     if (room.teams.length >= 6) {
       const err = { success: false, message: 'Room is already full! Maximum 6 teams permitted.' };
+      if (typeof callback === 'function') callback(err);
+      return socket.emit('join_error', err);
+    }
+
+    if (room.teams.some(t => t.logo === logo)) {
+      const err = { success: false, message: `Mascot ${logo} is already taken!` };
+      if (typeof callback === 'function') callback(err);
+      return socket.emit('join_error', err);
+    }
+
+    if (room.teams.some(t => t.color === color)) {
+      const err = { success: false, message: `Color is already taken by another franchise!` };
       if (typeof callback === 'function') callback(err);
       return socket.emit('join_error', err);
     }

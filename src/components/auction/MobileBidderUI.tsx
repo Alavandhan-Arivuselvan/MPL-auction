@@ -3,7 +3,7 @@ import { Award, Shield, User, DollarSign, Timer, Zap, AlertCircle, CheckCircle2,
 import { useSocket } from '../../context/SocketContext';
 import { formatINR, formatRating, getRatingColor, getRoleBadge } from '../../lib/formatters';
 import { SQUAD_LIMIT, MIN_BID_RESERVE } from '../../data/defaultData';
-import { SquadBreakdownModal } from '../dashboard/SquadBreakdownModal';
+
 
 export const MobileBidderUI: React.FC = () => {
   const {
@@ -21,7 +21,7 @@ export const MobileBidderUI: React.FC = () => {
     placeBid,
   } = useSocket();
 
-  const [showSquadModal, setShowSquadModal] = useState(false);
+  // No modal state
 
   if (!serverCurrentPlayer || !myTeam) {
     return (
@@ -70,7 +70,7 @@ export const MobileBidderUI: React.FC = () => {
     : 'text-emerald-400 border-emerald-500 bg-emerald-500/10';
 
   return (
-    <div className="max-w-md mx-auto min-h-screen flex flex-col justify-between pb-6 px-4 pt-2 select-none">
+    <div className="h-[100dvh] w-screen overflow-hidden flex flex-col justify-between pb-6 px-4 pt-2 select-none">
       
       {/* 1. STICKY LIVE HUD (Top Mobile Bar) */}
       <div className="sticky top-2 z-30 mb-3 rounded-2xl glass-card border border-slate-700/80 p-3 shadow-xl flex items-center justify-between">
@@ -100,8 +100,7 @@ export const MobileBidderUI: React.FC = () => {
             </span>
           </div>
 
-          <button
-            onClick={() => setShowSquadModal(true)}
+          <div
             className="px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-center"
             title="Inspect your squad"
           >
@@ -109,7 +108,7 @@ export const MobileBidderUI: React.FC = () => {
             <span className="text-xs font-extrabold text-amber-400">
               {myTeam.players.length}/{SQUAD_LIMIT}
             </span>
-          </button>
+          </div>
         </div>
       </div>
 
@@ -251,8 +250,7 @@ export const MobileBidderUI: React.FC = () => {
 
       </div>
 
-      {/* Squad Inspection Modal */}
-      <SquadBreakdownModal team={myTeam} onClose={() => setShowSquadModal(false)} />
+
 
     </div>
   );

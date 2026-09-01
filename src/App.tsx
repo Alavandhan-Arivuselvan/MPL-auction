@@ -12,6 +12,7 @@ import { ChampionshipLeaderboard } from './components/dashboard/ChampionshipLead
 import { CSVUploader } from './components/setup/CSVUploader';
 import { LobbyModal } from './components/lobby/LobbyModal';
 import { MobileBidderUI } from './components/auction/MobileBidderUI';
+import { AuthScreen } from './components/auth/AuthScreen';
 import { Play, ChevronLeft, ChevronRight, Trophy, Sparkles, Wifi, Radio } from 'lucide-react';
 
 function AuctionAppContent() {
@@ -58,6 +59,28 @@ function AuctionAppContent() {
 
   // Determine if in online multiplayer room
   const isOnlineMode = !!roomId;
+
+  const [authRole, setAuthRole] = useState<'admin' | 'user' | null>(null);
+
+  const handleUserJoin = async (username: string, roomCode: string, logo: string, color: string) => {
+    const res = await joinRoom(roomCode, username, logo, color);
+    if (res.success) {
+      setAuthRole('user');
+      setCurrentTab('multiplayer');
+    } else {
+      alert(res.message || 'Failed to join');
+    }
+  };
+
+  const handleAdminCreate = async (password: string) => {
+    // Since admin provides password, we let them pass to setup
+    setAuthRole('admin');
+    setCurrentTab('setup');
+  };
+
+  if (!authRole && !isOnlineMode) {
+    return <AuthScreen onJoinAsUser={handleUserJoin} onCreateAsAdmin={handleAdminCreate} />;
+  }
 
   // If in online room as a BIDDER (participant), display the Mobile-First Bidding UI!
   if (isOnlineMode && !isHost && roomStatus === 'LIVE') {
@@ -271,10 +294,7 @@ function AuctionAppContent() {
                     {/* Live Bid Stream Ticker */}
                     <BidHistoryTicker bids={activeBidHistory} onUndo={localUndoLastBid} />
 
-                    {/* Franchise Standings Preview */}
-                    <div className="flex-1">
-                      <TeamsGrid teams={activeTeams} leadingTeamId={activeLeadingTeamId} />
-                    </div>
+
 
                   </div>
 
