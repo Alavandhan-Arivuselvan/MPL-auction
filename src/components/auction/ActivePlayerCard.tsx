@@ -89,11 +89,6 @@ export const ActivePlayerCard: React.FC<ActivePlayerCardProps> = ({
                   MPL 2026
                 </span>
 
-                {/* Rating Badge on Avatar Corner */}
-                <div className={`absolute top-2.5 right-2.5 px-2.5 py-1 rounded-xl border shadow-lg flex items-center gap-1 backdrop-blur-md ${ratingColor}`}>
-                  <Award className="w-3.5 h-3.5" />
-                  <span className="text-sm font-extrabold">{formatRating(player.rating)}</span>
-                </div>
               </div>
             </div>
 
@@ -120,10 +115,9 @@ export const ActivePlayerCard: React.FC<ActivePlayerCardProps> = ({
                 <span>Specialization:</span>
                 <span className="text-white">{player.role}</span>
               </div>
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-300 bg-slate-900/80 px-3 py-1 rounded-lg border border-slate-800">
-                <Award className="w-3.5 h-3.5 text-amber-400" />
-                <span>Official Rating:</span>
-                <span className="font-extrabold text-amber-400">{formatRating(player.rating)} / 10.0</span>
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 bg-slate-900/80 px-3 py-1 rounded-lg border border-slate-800 opacity-60">
+                <Award className="w-3.5 h-3.5" />
+                <span className="italic">Rating Hidden (Blind Bidding)</span>
               </div>
             </div>
 

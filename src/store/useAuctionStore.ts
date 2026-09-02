@@ -27,6 +27,7 @@ interface AuctionStore {
   initDefaultData: () => void;
   loadCSV: (csvString: string) => { success: boolean; count: number; errors: string[] };
   updateTeam: (teamId: string, updates: Partial<Team>) => void;
+  updatePlayer: (playerId: string, updates: Partial<Player>) => void;
   startAuction: () => void;
   pauseAuction: () => void;
   resumeAuction: () => void;
@@ -100,6 +101,12 @@ export const useAuctionStore = create<AuctionStore>()(
       updateTeam: (teamId: string, updates: Partial<Team>) => {
         set((state) => ({
           teams: state.teams.map((t) => (t.id === teamId ? { ...t, ...updates } : t)),
+        }));
+      },
+
+      updatePlayer: (playerId: string, updates: Partial<Player>) => {
+        set((state) => ({
+          players: state.players.map((p) => (p.id === playerId ? { ...p, ...updates } : p)),
         }));
       },
 

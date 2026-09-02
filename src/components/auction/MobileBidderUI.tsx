@@ -141,11 +141,6 @@ export const MobileBidderUI: React.FC = () => {
           <div className="relative w-24 h-24 mx-auto mb-3 rounded-2xl bg-gradient-to-br from-slate-800 to-slate-950 border-2 border-slate-700 flex items-center justify-center text-3xl font-extrabold text-amber-400 font-display shadow-lg">
             {serverCurrentPlayer.name.slice(0, 2).toUpperCase()}
             
-            {/* Rating Tag */}
-            <div className={`absolute -bottom-2 px-2 py-0.5 rounded-lg border shadow-md flex items-center gap-1 text-[11px] font-black ${ratingColor}`}>
-              <Award className="w-3 h-3" />
-              <span>{formatRating(serverCurrentPlayer.rating)}</span>
-            </div>
           </div>
 
           {/* Player Name */}
@@ -156,7 +151,7 @@ export const MobileBidderUI: React.FC = () => {
           <div className="flex items-center justify-center gap-2 mt-1 text-xs text-slate-400">
             <span>Base: <strong className="text-slate-300">{formatINR(serverCurrentPlayer.basePrice)}</strong></span>
             <span>•</span>
-            <span>Rating: <strong className="text-amber-400">{formatRating(serverCurrentPlayer.rating)} / 10</strong></span>
+            <span className="italic opacity-70">Rating Hidden</span>
           </div>
 
           {/* CURRENT LIVE BID BOX */}

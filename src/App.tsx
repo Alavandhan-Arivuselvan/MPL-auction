@@ -36,6 +36,7 @@ function AuctionAppContent() {
     placeBid: socketPlaceBid,
     markSold: socketMarkSold,
     markUnsold: socketMarkUnsold,
+    createRoom,
     joinRoom,
   } = useSocket();
 
@@ -61,7 +62,15 @@ function AuctionAppContent() {
   // Determine if in online multiplayer room
   const isOnlineMode = !!roomId;
 
-  const [authRole, setAuthRole] = useState<'admin' | 'user' | null>(null);
+  const [authRole, setAuthRole] = useState<'admin' | 'user' | 'host' | null>(null);
+
+  // Sync authRole if auto-reconnected via socket
+  React.useEffect(() => {
+    if (isOnlineMode && !authRole) {
+      setAuthRole(isHost ? 'host' : 'user');
+      setCurrentTab(roomStatus === 'LIVE' ? 'arena' : 'multiplayer');
+    }
+  }, [isOnlineMode, isHost, authRole, roomStatus]);
 
   const handleUserJoin = async (username: string, roomCode: string, logo: string, color: string) => {
     const res = await joinRoom(roomCode, username, logo, color);
@@ -73,6 +82,16 @@ function AuctionAppContent() {
     }
   };
 
+  const handleHostCreate = async (teamName: string, logo: string, color: string) => {
+    const res = await createRoom(teamName, logo, color);
+    if (res.success) {
+      setAuthRole('host');
+      setCurrentTab('multiplayer');
+    } else {
+      alert('Failed to create room');
+    }
+  };
+
   const handleAdminCreate = async (password: string) => {
     // Since admin provides password, we let them pass to setup
     setAuthRole('admin');
@@ -80,7 +99,27 @@ function AuctionAppContent() {
   };
 
   if (!authRole && !isOnlineMode) {
-    return <AuthScreen onJoinAsUser={handleUserJoin} onCreateAsAdmin={handleAdminCreate} />;
+    return <AuthScreen onJoinAsUser={handleUserJoin} onHostAsHost={handleHostCreate} onCreateAsAdmin={handleAdminCreate} />;
+  }
+
+  // Admin Dashboard Isolation
+  if (authRole === 'admin') {
+    return (
+      <div className="min-h-screen flex flex-col bg-[#070b14] text-slate-100 selection:bg-amber-500 selection:text-black">
+        <div className="bg-gradient-to-r from-amber-500/20 via-blue-500/20 to-purple-500/20 border-b border-amber-500/30 px-4 py-3 flex items-center justify-between">
+          <div className="font-black text-amber-400 font-display">MPL ADMIN DASHBOARD</div>
+          <button 
+            onClick={() => setAuthRole(null)}
+            className="px-3 py-1 bg-slate-800 text-xs font-bold rounded text-slate-300 hover:text-white hover:bg-slate-700"
+          >
+            Logout
+          </button>
+        </div>
+        <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+          <CSVUploader />
+        </main>
+      </div>
+    );
   }
 
   // If in online room as a BIDDER (participant), display the Mobile-First Bidding UI!
@@ -109,8 +148,8 @@ function AuctionAppContent() {
     <div className="min-h-screen flex flex-col bg-[#070b14] text-slate-100 selection:bg-amber-500 selection:text-black">
       {/* Top Navigation */}
       <Navbar
-        currentTab={currentTab as 'arena' | 'setup' | 'leaderboard'}
-        setCurrentTab={(tab) => setCurrentTab(tab as 'arena' | 'setup' | 'leaderboard' | 'multiplayer')}
+        currentTab={currentTab as 'arena' | 'leaderboard'}
+        setCurrentTab={(tab) => setCurrentTab(tab as 'arena' | 'leaderboard' | 'multiplayer')}
       />
 
       {/* Online Room Banner if active */}
@@ -314,11 +353,6 @@ function AuctionAppContent() {
         {/* TAB 3: CHAMPIONSHIP LEADERBOARD */}
         {currentTab === 'leaderboard' && (
           <ChampionshipLeaderboard teams={activeTeams} players={localPlayers} />
-        )}
-
-        {/* TAB 4: SETUP & CSV */}
-        {currentTab === 'setup' && (
-          <CSVUploader />
         )}
 
       </main>

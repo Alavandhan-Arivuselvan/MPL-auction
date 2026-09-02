@@ -10,6 +10,7 @@ export const CSVUploader: React.FC = () => {
   const loadCSV = useAuctionStore((s) => s.loadCSV);
   const initDefaultData = useAuctionStore((s) => s.initDefaultData);
   const updateTeam = useAuctionStore((s) => s.updateTeam);
+  const updatePlayer = useAuctionStore((s) => s.updatePlayer);
 
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -225,12 +226,27 @@ export const CSVUploader: React.FC = () => {
                       </span>
                     </td>
                     <td className="py-3 px-5 text-center">
-                      <span className={`px-2 py-0.5 rounded-md border text-[11px] font-extrabold ${ratingColor}`}>
-                        {formatRating(player.rating)}
-                      </span>
+                      <div className={`px-2 py-0.5 rounded-md border text-[11px] font-extrabold flex items-center justify-center gap-1 w-20 mx-auto ${ratingColor}`}>
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="1"
+                          max="10"
+                          value={player.rating}
+                          onChange={(e) => updatePlayer(player.id, { rating: parseFloat(e.target.value) || 0 })}
+                          className="w-full bg-transparent text-center focus:outline-none"
+                        />
+                      </div>
                     </td>
                     <td className="py-3 px-5 text-right font-extrabold text-amber-400 font-display text-sm">
-                      {formatINR(player.basePrice)}
+                      <input
+                        type="number"
+                        step="100000"
+                        min="0"
+                        value={player.basePrice}
+                        onChange={(e) => updatePlayer(player.id, { basePrice: parseInt(e.target.value) || 0 })}
+                        className="w-28 bg-transparent text-right border-b border-transparent focus:border-amber-400 focus:outline-none text-amber-400"
+                      />
                     </td>
                     <td className="py-3 px-5 text-center">
                       {player.isSold ? (

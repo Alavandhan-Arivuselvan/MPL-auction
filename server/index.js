@@ -83,9 +83,9 @@ function stopRoomTimer(room) {
   }
 }
 
-function startRoomTimer(room) {
+function startRoomTimer(room, seconds = 20) {
   stopRoomTimer(room);
-  room.timerSeconds = 20;
+  room.timerSeconds = seconds;
 
   room.timerInterval = setInterval(() => {
     if (room.status !== 'LIVE') return;
@@ -173,7 +173,7 @@ io.on('connection', (socket) => {
   });
 
   // 2. PARTICIPANT JOINS ROOM
-  socket.on('join_room', ({ roomId, teamName, logo, color }, callback) => {
+  socket.on('join_room', ({ roomId, teamName, logo, color, existingTeamId }, callback) => {
     const cleanRoomId = (roomId || '').trim().toUpperCase();
     const room = rooms.get(cleanRoomId);
 
@@ -181,6 +181,31 @@ io.on('connection', (socket) => {
       const err = { success: false, message: 'Room code not found. Please check and try again.' };
       if (typeof callback === 'function') callback(err);
       return socket.emit('join_error', err);
+    }
+
+    // Handle Reconnection
+    if (existingTeamId) {
+      const existingTeam = room.teams.find(t => t.id === existingTeamId);
+      if (existingTeam) {
+        existingTeam.socketId = socket.id;
+        socket.join(cleanRoomId);
+        socket.data = { roomId: cleanRoomId, teamId: existingTeam.id, isHost: room.hostSocketId === socket.id };
+        
+        console.log(`[Team Reconnected] ${existingTeam.name} reconnected to ${cleanRoomId}`);
+        
+        const payload = {
+          success: true,
+          roomId: cleanRoomId,
+          myTeam: existingTeam,
+          teams: room.teams,
+          status: room.status,
+          isHost: room.hostSocketId === socket.id,
+        };
+        
+        if (typeof callback === 'function') callback(payload);
+        socket.emit('joined_successfully', payload);
+        return; // Early return for reconnect
+      }
     }
 
     if (room.teams.length >= 6) {
@@ -226,6 +251,7 @@ io.on('connection', (socket) => {
       myTeam: newTeam,
       teams: room.teams,
       status: room.status,
+      isHost: false,
     };
 
     if (typeof callback === 'function') callback(payload);
@@ -356,8 +382,8 @@ io.on('connection', (socket) => {
 
     room.bidHistory.unshift(bidRecord);
 
-    // Reset clock on bid
-    startRoomTimer(room);
+    // Reset clock on bid to 15 seconds
+    startRoomTimer(room, 15);
 
     console.log(`[Bid Accepted] ${team.name} bid ${targetAmount} on ${activePlayer.name}`);
 
@@ -371,7 +397,7 @@ io.on('connection', (socket) => {
       leadingTeamName: team.name,
       leadingTeamColor: team.color,
       bidRecord,
-      timerSeconds: 20,
+      timerSeconds: 15,
     });
   });
 
@@ -482,6 +508,22 @@ io.on('connection', (socket) => {
   // 7. DISCONNECT HANDLER
   socket.on('disconnect', () => {
     console.log(`[Socket Disconnected] ${socket.id}`);
+    
+    // Iterate through all rooms to find if this socket was a host or participant
+    rooms.forEach((room, roomId) => {
+      const team = room.teams.find(t => t.socketId === socket.id);
+      if (team) {
+        console.log(`[Team Disconnected] ${team.name} disconnected from ${roomId}`);
+        // We do NOT remove the team from room.teams, so they can reconnect.
+        io.to(roomId).emit('team_disconnected', { teamId: team.id });
+      }
+      
+      // If host disconnected, we might want to pause or transfer host, but for now we'll just log.
+      if (room.hostSocketId === socket.id) {
+        console.log(`[Host Disconnected] Host left room ${roomId}`);
+        io.to(roomId).emit('host_disconnected');
+      }
+    });
   });
 });
 

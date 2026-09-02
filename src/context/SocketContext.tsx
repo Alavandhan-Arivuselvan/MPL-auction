@@ -77,11 +77,37 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     newSocket.on('connect', () => {
       console.log(`[Socket Connected] Socket ID: ${newSocket.id}`);
       setIsConnected(true);
+      
+      const sessionStr = localStorage.getItem('mpl_session');
+      if (sessionStr) {
+        try {
+          const session = JSON.parse(sessionStr);
+          if (session.roomId && session.teamId) {
+            console.log('Attempting auto-reconnect with session:', session);
+            newSocket.emit('join_room', { 
+              roomId: session.roomId, 
+              existingTeamId: session.teamId 
+            });
+          }
+        } catch (e) {
+          console.error('Failed to parse mpl_session', e);
+        }
+      }
     });
 
     newSocket.on('disconnect', () => {
       console.log(`[Socket Disconnected]`);
       setIsConnected(false);
+    });
+    
+    newSocket.on('joined_successfully', (res: any) => {
+      if (res.success && res.roomId && res.myTeam) {
+        setRoomId(res.roomId);
+        setIsHost(res.isHost || false);
+        setMyTeam(res.myTeam);
+        if (res.teams) setTeams(res.teams);
+        if (res.status) setRoomStatus(res.status);
+      }
     });
 
     // 1. Lobby updates
@@ -201,6 +227,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (!socket) return resolve({ success: false });
       socket.emit('create_room', { teamName, logo, color }, (res: { success: boolean; roomId?: string; myTeam?: Team; teams?: Team[] }) => {
         if (res.success && res.roomId && res.myTeam) {
+          localStorage.setItem('mpl_session', JSON.stringify({ roomId: res.roomId, teamId: res.myTeam.id, isHost: true }));
           setRoomId(res.roomId);
           setIsHost(true);
           setMyTeam(res.myTeam);
@@ -225,6 +252,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         teams?: Team[];
       }) => {
         if (res.success && res.roomId && res.myTeam) {
+          localStorage.setItem('mpl_session', JSON.stringify({ roomId: res.roomId, teamId: res.myTeam.id, isHost: false }));
           setRoomId(res.roomId);
           setIsHost(false);
           setMyTeam(res.myTeam);
@@ -275,6 +303,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const leaveRoom = () => {
+    localStorage.removeItem('mpl_session');
     setRoomId(null);
     setIsHost(false);
     setMyTeam(null);

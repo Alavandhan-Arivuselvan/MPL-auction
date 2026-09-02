@@ -3,11 +3,12 @@ import { ShieldAlert, Users, PlusCircle, LogIn } from 'lucide-react';
 
 interface AuthScreenProps {
   onJoinAsUser: (username: string, roomCode: string, logo: string, color: string) => void;
+  onHostAsHost: (teamName: string, logo: string, color: string) => void;
   onCreateAsAdmin: (password: string) => void;
 }
 
-export function AuthScreen({ onJoinAsUser, onCreateAsAdmin }: AuthScreenProps) {
-  const [mode, setMode] = useState<'select' | 'user' | 'admin'>('select');
+export function AuthScreen({ onJoinAsUser, onHostAsHost, onCreateAsAdmin }: AuthScreenProps) {
+  const [mode, setMode] = useState<'select' | 'user' | 'host' | 'admin'>('select');
   
   // User state
   const [username, setUsername] = useState('');
@@ -26,6 +27,12 @@ export function AuthScreen({ onJoinAsUser, onCreateAsAdmin }: AuthScreenProps) {
     e.preventDefault();
     if (!username.trim() || !roomCode.trim()) return;
     onJoinAsUser(username, roomCode, teamLogo, teamColor);
+  };
+
+  const handleHostCreate = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!username.trim()) return;
+    onHostAsHost(username, teamLogo, teamColor);
   };
 
   const handleAdminCreate = (e: React.FormEvent) => {
@@ -68,6 +75,22 @@ export function AuthScreen({ onJoinAsUser, onCreateAsAdmin }: AuthScreenProps) {
             </button>
 
             <button
+              onClick={() => setMode('host')}
+              className="w-full flex items-center justify-between p-4 rounded-2xl bg-slate-800/50 hover:bg-slate-800 border border-slate-700 hover:border-amber-500/50 transition-all group"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center">
+                  <PlusCircle className="w-5 h-5" />
+                </div>
+                <div className="text-left">
+                  <div className="font-bold text-white group-hover:text-amber-400 transition-colors">Host Game</div>
+                  <div className="text-xs text-slate-400">Create a room and act as Host Franchise</div>
+                </div>
+              </div>
+              <PlusCircle className="w-5 h-5 text-slate-500 group-hover:text-amber-400 transition-colors" />
+            </button>
+
+            <button
               onClick={() => setMode('admin')}
               className="w-full flex items-center justify-between p-4 rounded-2xl bg-slate-800/50 hover:bg-slate-800 border border-slate-700 hover:border-amber-500/50 transition-all group"
             >
@@ -76,11 +99,11 @@ export function AuthScreen({ onJoinAsUser, onCreateAsAdmin }: AuthScreenProps) {
                   <ShieldAlert className="w-5 h-5" />
                 </div>
                 <div className="text-left">
-                  <div className="font-bold text-white group-hover:text-amber-400 transition-colors">Create Game</div>
-                  <div className="text-xs text-slate-400">Host as Admin (Requires Password)</div>
+                  <div className="font-bold text-white group-hover:text-amber-400 transition-colors">Admin Login</div>
+                  <div className="text-xs text-slate-400">Manage player data (Requires Password)</div>
                 </div>
               </div>
-              <PlusCircle className="w-5 h-5 text-slate-500 group-hover:text-amber-400 transition-colors" />
+              <ShieldAlert className="w-5 h-5 text-slate-500 group-hover:text-amber-400 transition-colors" />
             </button>
           </div>
         </div>
@@ -185,12 +208,98 @@ export function AuthScreen({ onJoinAsUser, onCreateAsAdmin }: AuthScreenProps) {
     );
   }
 
+  if (mode === 'host') {
+    return (
+      <div className="min-h-screen bg-[#070b14] flex flex-col items-center justify-center p-4">
+        <div className="max-w-md w-full glass-panel border border-amber-500/30 rounded-3xl p-8 space-y-6 shadow-2xl">
+          <div className="text-center">
+            <h2 className="text-2xl font-black text-white uppercase tracking-wider mb-2">Host New Game</h2>
+            <p className="text-slate-400 text-sm">Configure your Host Franchise</p>
+          </div>
+
+          <form onSubmit={handleHostCreate} className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Host Franchise Name</label>
+              <input
+                type="text"
+                required
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="e.g. Admin All-Stars"
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-amber-500 transition-colors"
+              />
+            </div>
+            
+            {/* Logo / Emoji Picker */}
+            <div>
+              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                Team Mascot
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {emojiOptions.map((emoji) => (
+                  <button
+                    type="button"
+                    key={emoji}
+                    onClick={() => setTeamLogo(emoji)}
+                    className={`w-9 h-9 rounded-xl text-lg flex items-center justify-center border transition ${
+                      teamLogo === emoji
+                        ? 'bg-amber-500/20 border-amber-400 scale-110'
+                        : 'bg-slate-900 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Color Picker */}
+            <div>
+              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                Theme Color
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {colorOptions.map((color) => (
+                  <button
+                    type="button"
+                    key={color}
+                    onClick={() => setTeamColor(color)}
+                    className={`w-7 h-7 rounded-full border-2 transition ${
+                      teamColor === color ? 'border-white scale-110 shadow-lg' : 'border-transparent opacity-70'
+                    }`}
+                    style={{ backgroundColor: color }}
+                  />
+                ))}
+              </div>
+            </div>
+            
+            <div className="pt-2 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setMode('select')}
+                className="px-4 py-3 rounded-xl bg-slate-800 text-slate-300 font-bold hover:bg-slate-700 transition"
+              >
+                Back
+              </button>
+              <button
+                type="submit"
+                className="flex-1 px-4 py-3 rounded-xl bg-amber-500 text-black font-extrabold hover:bg-amber-400 transition shadow-lg shadow-amber-500/20"
+              >
+                Create Room
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#070b14] flex flex-col items-center justify-center p-4">
       <div className="max-w-md w-full glass-panel border border-amber-500/30 rounded-3xl p-8 space-y-6 shadow-2xl">
         <div className="text-center">
-          <h2 className="text-2xl font-black text-white uppercase tracking-wider mb-2">Admin Setup</h2>
-          <p className="text-slate-400 text-sm">Enter admin password to create room</p>
+          <h2 className="text-2xl font-black text-white uppercase tracking-wider mb-2">Admin Dashboard Login</h2>
+          <p className="text-slate-400 text-sm">Enter admin password to manage game data</p>
         </div>
 
         <form onSubmit={handleAdminCreate} className="space-y-4">
@@ -219,7 +328,7 @@ export function AuthScreen({ onJoinAsUser, onCreateAsAdmin }: AuthScreenProps) {
               type="submit"
               className="flex-1 px-4 py-3 rounded-xl bg-amber-500 text-black font-extrabold hover:bg-amber-400 transition shadow-lg shadow-amber-500/20"
             >
-              Create Room
+              Login as Admin
             </button>
           </div>
         </form>
