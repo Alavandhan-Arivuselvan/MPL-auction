@@ -307,6 +307,8 @@ function AuctionAppContent() {
 
                     {/* AUCTIONEER BIDDING CONSOLE */}
                     <AuctioneerControls
+                      isOnlineMode={isOnlineMode}
+                      myTeam={myTeam || undefined}
                       teams={activeTeams}
                       activePlayer={activePlayer}
                       currentBid={activeCurrentBid}

@@ -95,13 +95,115 @@ function startRoomTimer(room, seconds = 20) {
       io.to(room.roomId).emit('timer_tick', { timerSeconds: room.timerSeconds });
     } else {
       stopRoomTimer(room);
-      io.to(room.roomId).emit('timer_expired', {
-        currentPlayer: room.players[room.currentPlayerIndex],
-        leadingTeamId: room.leadingTeamId,
-        currentBid: room.currentBid,
-      });
+      if (room.leadingTeamId) {
+        handleMarkSold(room.roomId);
+      } else {
+        handleMarkUnsold(room.roomId);
+      }
     }
   }, 1000);
+}
+
+function handleMarkSold(roomId) {
+  const room = rooms.get(roomId);
+  if (!room || !room.leadingTeamId) return;
+
+  const activePlayer = room.players[room.currentPlayerIndex];
+  if (activePlayer.isSold || activePlayer.isUnsold) return; // Prevent double trigger race conditions
+
+  stopRoomTimer(room);
+
+  const winningTeam = room.teams.find((t) => t.id === room.leadingTeamId);
+
+  activePlayer.isSold = true;
+  activePlayer.soldPrice = room.currentBid;
+  activePlayer.soldTo = winningTeam.id;
+
+  winningTeam.purseRemaining -= room.currentBid;
+  winningTeam.players.push({ ...activePlayer });
+
+  // Next player calculation
+  let nextIndex = room.currentPlayerIndex + 1;
+  while (nextIndex < room.players.length && (room.players[nextIndex].isSold || room.players[nextIndex].isUnsold)) {
+    nextIndex++;
+  }
+
+  const allTeamsFull = room.teams.every((t) => t.players.length >= SQUAD_LIMIT);
+  const hasMore = nextIndex < room.players.length;
+
+  if (!hasMore || allTeamsFull) {
+    room.status = 'COMPLETED';
+    io.to(roomId).emit('auction_completed', {
+      teams: rankTeamsWithTieBreaker(room.teams),
+      players: room.players,
+    });
+  } else {
+    room.currentPlayerIndex = nextIndex;
+    const nextPlayer = room.players[nextIndex];
+    room.currentBid = nextPlayer.basePrice;
+    room.leadingTeamId = null;
+    room.bidHistory = [];
+
+    startRoomTimer(room);
+
+    io.to(roomId).emit('player_sold', {
+      soldPlayer: activePlayer,
+      winningTeam,
+      soldPrice: activePlayer.soldPrice,
+      teams: room.teams,
+      nextPlayer,
+      nextIndex,
+      timerSeconds: 20,
+    });
+  }
+}
+
+function handleMarkUnsold(roomId) {
+  const room = rooms.get(roomId);
+  if (!room) return;
+
+  const activePlayer = room.players[room.currentPlayerIndex];
+  if (activePlayer.isSold || activePlayer.isUnsold) return; // Prevent double trigger race conditions
+
+  stopRoomTimer(room);
+
+  activePlayer.isUnsold = true;
+  room.unsoldQueue.push({ ...activePlayer });
+
+  let nextIndex = room.currentPlayerIndex + 1;
+  while (nextIndex < room.players.length && (room.players[nextIndex].isSold || room.players[nextIndex].isUnsold)) {
+    nextIndex++;
+  }
+
+  if (nextIndex >= room.players.length) {
+    if (room.unsoldQueue.length > 0) {
+      io.to(roomId).emit('round_ended_with_unsold', {
+        unsoldQueue: room.unsoldQueue,
+      });
+    } else {
+      room.status = 'COMPLETED';
+      io.to(roomId).emit('auction_completed', {
+        teams: rankTeamsWithTieBreaker(room.teams),
+        players: room.players,
+      });
+    }
+  } else {
+    room.currentPlayerIndex = nextIndex;
+    const nextPlayer = room.players[nextIndex];
+    room.currentBid = nextPlayer.basePrice;
+    room.leadingTeamId = null;
+    room.bidHistory = [];
+
+    startRoomTimer(room);
+
+    io.to(roomId).emit('player_unsold', {
+      unsoldPlayer: activePlayer,
+      nextPlayer,
+      nextIndex,
+      unsoldQueueCount: room.unsoldQueue.length,
+      timerSeconds: 20,
+    });
+  }
 }
 
 // Tie-breaker: If average rating is identical, team with higher remaining purse ranks higher
@@ -403,105 +505,13 @@ io.on('connection', (socket) => {
 
   // 5. HOST MARKS PLAYER AS SOLD
   socket.on('mark_sold', ({ roomId }, callback) => {
-    const room = rooms.get(roomId);
-    if (!room || !room.leadingTeamId) return;
-
-    stopRoomTimer(room);
-
-    const activePlayer = room.players[room.currentPlayerIndex];
-    const winningTeam = room.teams.find((t) => t.id === room.leadingTeamId);
-
-    activePlayer.isSold = true;
-    activePlayer.soldPrice = room.currentBid;
-    activePlayer.soldTo = winningTeam.id;
-
-    winningTeam.purseRemaining -= room.currentBid;
-    winningTeam.players.push({ ...activePlayer });
-
-    // Next player calculation
-    let nextIndex = room.currentPlayerIndex + 1;
-    while (nextIndex < room.players.length && (room.players[nextIndex].isSold || room.players[nextIndex].isUnsold)) {
-      nextIndex++;
-    }
-
-    const allTeamsFull = room.teams.every((t) => t.players.length >= SQUAD_LIMIT);
-    const hasMore = nextIndex < room.players.length;
-
-    if (!hasMore || allTeamsFull) {
-      room.status = 'COMPLETED';
-      io.to(roomId).emit('auction_completed', {
-        teams: rankTeamsWithTieBreaker(room.teams),
-        players: room.players,
-      });
-    } else {
-      room.currentPlayerIndex = nextIndex;
-      const nextPlayer = room.players[nextIndex];
-      room.currentBid = nextPlayer.basePrice;
-      room.leadingTeamId = null;
-      room.bidHistory = [];
-
-      startRoomTimer(room);
-
-      io.to(roomId).emit('player_sold', {
-        soldPlayer: activePlayer,
-        winningTeam,
-        soldPrice: activePlayer.soldPrice,
-        teams: room.teams,
-        nextPlayer,
-        nextIndex,
-        timerSeconds: 20,
-      });
-    }
-
+    handleMarkSold(roomId);
     if (typeof callback === 'function') callback({ success: true });
   });
 
   // 6. HOST MARKS PLAYER AS UNSOLD
   socket.on('mark_unsold', ({ roomId }, callback) => {
-    const room = rooms.get(roomId);
-    if (!room) return;
-
-    stopRoomTimer(room);
-
-    const activePlayer = room.players[room.currentPlayerIndex];
-    activePlayer.isUnsold = true;
-    room.unsoldQueue.push({ ...activePlayer });
-
-    let nextIndex = room.currentPlayerIndex + 1;
-    while (nextIndex < room.players.length && (room.players[nextIndex].isSold || room.players[nextIndex].isUnsold)) {
-      nextIndex++;
-    }
-
-    if (nextIndex >= room.players.length) {
-      if (room.unsoldQueue.length > 0) {
-        io.to(roomId).emit('round_ended_with_unsold', {
-          unsoldQueue: room.unsoldQueue,
-        });
-      } else {
-        room.status = 'COMPLETED';
-        io.to(roomId).emit('auction_completed', {
-          teams: rankTeamsWithTieBreaker(room.teams),
-          players: room.players,
-        });
-      }
-    } else {
-      room.currentPlayerIndex = nextIndex;
-      const nextPlayer = room.players[nextIndex];
-      room.currentBid = nextPlayer.basePrice;
-      room.leadingTeamId = null;
-      room.bidHistory = [];
-
-      startRoomTimer(room);
-
-      io.to(roomId).emit('player_unsold', {
-        unsoldPlayer: activePlayer,
-        nextPlayer,
-        nextIndex,
-        unsoldQueueCount: room.unsoldQueue.length,
-        timerSeconds: 20,
-      });
-    }
-
+    handleMarkUnsold(roomId);
     if (typeof callback === 'function') callback({ success: true });
   });
 
