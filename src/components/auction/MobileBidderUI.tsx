@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Award, Shield, User, DollarSign, Timer, Zap, AlertCircle, CheckCircle2, Loader2, Users } from 'lucide-react';
+import { Award, Shield, User, DollarSign, Timer, Zap, AlertCircle, CheckCircle2, Loader2, Users, Gavel } from 'lucide-react';
 import { useSocket } from '../../context/SocketContext';
 import { formatINR, formatRating, getRatingColor, getRoleBadge } from '../../lib/formatters';
 import { SQUAD_LIMIT, MIN_BID_RESERVE } from '../../data/defaultData';
+import { SquadBreakdownModal } from '../dashboard/SquadBreakdownModal';
 
 
 export const MobileBidderUI: React.FC = () => {
@@ -21,9 +22,10 @@ export const MobileBidderUI: React.FC = () => {
     lastBidError,
     placeBid,
     teams,
+    soldAnnouncement,
   } = useSocket();
 
-  // No modal state
+  const [showSquad, setShowSquad] = useState(false);
 
   if (!serverCurrentPlayer) {
     return (
@@ -214,8 +216,9 @@ export const MobileBidderUI: React.FC = () => {
           </div>
 
           <div
-            className="px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-center"
-            title="Inspect your squad"
+            className="px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-center cursor-pointer hover:bg-slate-700 hover:border-amber-500/50 transition-all active:scale-95"
+            title="Tap to view your squad"
+            onClick={() => setShowSquad(true)}
           >
             <span className="text-[9px] text-slate-400 block">Squad</span>
             <span className="text-xs font-extrabold text-amber-400">
@@ -358,7 +361,44 @@ export const MobileBidderUI: React.FC = () => {
 
       </div>
 
+      {/* Squad Breakdown Modal */}
+      {showSquad && (
+        <SquadBreakdownModal team={myTeam} onClose={() => setShowSquad(false)} />
+      )}
 
+      {/* SOLD Announcement Overlay */}
+      {soldAnnouncement && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="text-center p-8 space-y-4 max-w-sm mx-auto">
+            <div className="w-20 h-20 mx-auto rounded-2xl bg-emerald-500/20 border-2 border-emerald-500 flex items-center justify-center shadow-xl shadow-emerald-500/30 animate-bounce">
+              <Gavel className="w-10 h-10 text-emerald-400" />
+            </div>
+            <div>
+              <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+                SOLD!
+              </span>
+            </div>
+            <h2 className="text-2xl font-black text-white uppercase font-display tracking-wide">
+              {soldAnnouncement.playerName}
+            </h2>
+            <div className="flex items-center justify-center gap-3">
+              <span className="text-3xl">{soldAnnouncement.teamLogo}</span>
+              <div className="text-left">
+                <span className="text-xs text-slate-400 block">Bought by</span>
+                <span className="text-lg font-black" style={{ color: soldAnnouncement.teamColor }}>
+                  {soldAnnouncement.teamName}
+                </span>
+              </div>
+            </div>
+            <div className="p-4 rounded-2xl bg-slate-900/80 border border-amber-500/40">
+              <span className="text-[10px] uppercase font-bold tracking-widest text-slate-400 block mb-1">Sold For</span>
+              <span className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-300 to-amber-500 font-display">
+                {formatINR(soldAnnouncement.soldPrice)}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

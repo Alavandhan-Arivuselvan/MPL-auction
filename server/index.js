@@ -72,6 +72,56 @@ function getIPLIncrement(currentBid) {
   return 5000000;                                // +50L above 5 Cr
 }
 
+// Fisher-Yates shuffle for randomizing player order
+function shuffleArray(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+// Auto-recirculate unsold players with halved base prices
+function autoRecirculate(room, roomId) {
+  if (room.unsoldQueue.length === 0) return false;
+
+  console.log(`[Auto-Recirculate] Starting new round with ${room.unsoldQueue.length} unsold players in room ${roomId}`);
+
+  const unsoldIds = new Set(room.unsoldQueue.map(p => p.id));
+  room.players.forEach(p => {
+    if (unsoldIds.has(p.id)) {
+      p.isUnsold = false;
+      p.basePrice = Math.max(2500000, Math.round(p.basePrice * 0.5)); // 50% discount, min 25L
+    }
+  });
+
+  const firstIdx = room.players.findIndex(p => unsoldIds.has(p.id));
+  if (firstIdx === -1) return false;
+
+  room.unsoldQueue = [];
+  room.currentPlayerIndex = firstIdx;
+  room.currentBid = room.players[firstIdx].basePrice;
+  room.leadingTeamId = null;
+  room.bidHistory = [];
+  room.status = 'LIVE';
+
+  startRoomTimer(room);
+
+  const syncPayload = {
+    status: 'LIVE',
+    currentPlayer: room.players[firstIdx],
+    currentIndex: firstIdx,
+    totalPlayers: room.players.length,
+    currentBid: room.currentBid,
+    leadingTeamId: null,
+    teams: room.teams,
+    timerSeconds: 20,
+  };
+
+  io.to(roomId).emit('recirculate_started', syncPayload);
+  return true;
+}
+
 // Rooms State Map
 const rooms = new Map();
 
@@ -139,12 +189,44 @@ function handleMarkSold(roomId) {
   const allTeamsFull = room.teams.every((t) => t.players.length >= SQUAD_LIMIT);
   const hasMore = nextIndex < room.players.length;
 
-  if (!hasMore || allTeamsFull) {
+  if (allTeamsFull) {
+    // All teams have full squads — auction is done
     room.status = 'COMPLETED';
     io.to(roomId).emit('auction_completed', {
       teams: rankTeamsWithTieBreaker(room.teams),
       players: room.players,
     });
+  } else if (!hasMore) {
+    // No more players in list — try auto-recirculating unsold players
+    // First emit sold announcement, then recirculate after delay
+    io.to(roomId).emit('player_sold', {
+      soldPlayer: activePlayer,
+      winningTeam,
+      soldPrice: activePlayer.soldPrice,
+      teams: room.teams,
+      nextPlayer: null,
+      nextIndex: -1,
+      timerSeconds: 0,
+    });
+
+    if (room.unsoldQueue.length > 0) {
+      // Auto-recirculate after a brief delay for sold announcement
+      setTimeout(() => {
+        if (!autoRecirculate(room, roomId)) {
+          room.status = 'COMPLETED';
+          io.to(roomId).emit('auction_completed', {
+            teams: rankTeamsWithTieBreaker(room.teams),
+            players: room.players,
+          });
+        }
+      }, 4000);
+    } else {
+      room.status = 'COMPLETED';
+      io.to(roomId).emit('auction_completed', {
+        teams: rankTeamsWithTieBreaker(room.teams),
+        players: room.players,
+      });
+    }
   } else {
     room.currentPlayerIndex = nextIndex;
     const nextPlayer = room.players[nextIndex];
@@ -178,16 +260,43 @@ function handleMarkUnsold(roomId) {
   activePlayer.isUnsold = true;
   room.unsoldQueue.push({ ...activePlayer });
 
+  // Check if all teams are already full — if so, end immediately
+  const allTeamsFull = room.teams.every((t) => t.players.length >= SQUAD_LIMIT);
+  if (allTeamsFull) {
+    room.status = 'COMPLETED';
+    io.to(roomId).emit('auction_completed', {
+      teams: rankTeamsWithTieBreaker(room.teams),
+      players: room.players,
+    });
+    return;
+  }
+
   let nextIndex = room.currentPlayerIndex + 1;
   while (nextIndex < room.players.length && (room.players[nextIndex].isSold || room.players[nextIndex].isUnsold)) {
     nextIndex++;
   }
 
   if (nextIndex >= room.players.length) {
+    // All players exhausted — auto-recirculate unsold players if any remain
     if (room.unsoldQueue.length > 0) {
-      io.to(roomId).emit('round_ended_with_unsold', {
-        unsoldQueue: room.unsoldQueue,
+      io.to(roomId).emit('player_unsold', {
+        unsoldPlayer: activePlayer,
+        nextPlayer: null,
+        nextIndex: -1,
+        unsoldQueueCount: room.unsoldQueue.length,
+        timerSeconds: 0,
       });
+
+      // Auto-recirculate after brief delay
+      setTimeout(() => {
+        if (!autoRecirculate(room, roomId)) {
+          room.status = 'COMPLETED';
+          io.to(roomId).emit('auction_completed', {
+            teams: rankTeamsWithTieBreaker(room.teams),
+            players: room.players,
+          });
+        }
+      }, 3000);
     } else {
       room.status = 'COMPLETED';
       io.to(roomId).emit('auction_completed', {
@@ -412,6 +521,9 @@ io.on('connection', (socket) => {
     const room = rooms.get(roomId);
     if (!room) return;
 
+    // Shuffle players for random order
+    shuffleArray(room.players);
+
     room.status = 'LIVE';
     room.currentPlayerIndex = 0;
     room.currentBid = room.players[0]?.basePrice || 10000000;
@@ -420,7 +532,7 @@ io.on('connection', (socket) => {
 
     startRoomTimer(room);
 
-    console.log(`[Auction Started] Room ${roomId}`);
+    console.log(`[Auction Started] Room ${roomId} (players shuffled)`);
 
     const syncPayload = {
       status: 'LIVE',
@@ -605,7 +717,29 @@ io.on('connection', (socket) => {
     if (typeof callback === 'function') callback({ success: true });
   });
 
-  // 8. DISCONNECT HANDLER
+  // 8. HOST FORCE-ENDS THE AUCTION
+  socket.on('end_auction', ({ roomId }, callback) => {
+    const room = rooms.get(roomId);
+    if (!room) return;
+    if (room.hostSocketId !== socket.id) {
+      if (typeof callback === 'function') callback({ success: false, reason: 'Only the host can end the auction.' });
+      return;
+    }
+
+    stopRoomTimer(room);
+    room.status = 'COMPLETED';
+
+    console.log(`[Auction Force-Ended] Room ${roomId} by host`);
+
+    io.to(roomId).emit('auction_completed', {
+      teams: rankTeamsWithTieBreaker(room.teams),
+      players: room.players,
+    });
+
+    if (typeof callback === 'function') callback({ success: true });
+  });
+
+  // 9. DISCONNECT HANDLER
   socket.on('disconnect', () => {
     console.log(`[Socket Disconnected] ${socket.id}`);
     

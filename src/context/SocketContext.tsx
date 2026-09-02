@@ -1,7 +1,15 @@
-import React, { createContext, useContext, useEffect, useState, useMemo } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef, useMemo } from 'react';
 import { io, Socket } from 'socket.io-client';
 import type { Team, Player, BidRecord } from '../types/auction';
 import { soundEffects } from '../lib/soundEffects';
+
+export interface SoldAnnouncement {
+  playerName: string;
+  teamName: string;
+  teamLogo: string;
+  teamColor: string;
+  soldPrice: number;
+}
 
 interface SocketContextValue {
   socket: Socket | null;
@@ -23,6 +31,7 @@ interface SocketContextValue {
   bidHistory: BidRecord[];
   isSubmittingBid: boolean;
   lastBidError: string | null;
+  soldAnnouncement: SoldAnnouncement | null;
   createRoom: (teamName: string, logo: string, color: string) => Promise<{ success: boolean; roomId?: string }>;
   joinRoom: (roomId: string, teamName: string, logo: string, color: string) => Promise<{ success: boolean; message?: string }>;
   joinAsSpectator: (roomId: string) => Promise<{ success: boolean; message?: string }>;
@@ -31,6 +40,7 @@ interface SocketContextValue {
   markSold: () => void;
   markUnsold: () => void;
   recirculateUnsold: () => void;
+  endAuction: () => void;
   leaveRoom: () => void;
 }
 
@@ -67,6 +77,8 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const [isSubmittingBid, setIsSubmittingBid] = useState(false);
   const [lastBidError, setLastBidError] = useState<string | null>(null);
+  const [soldAnnouncement, setSoldAnnouncement] = useState<SoldAnnouncement | null>(null);
+  const soldAnnouncementTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const serverUrl = getSocketServerUrl();
@@ -184,20 +196,41 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       winningTeam: Team;
       soldPrice: number;
       teams: Team[];
-      nextPlayer: Player;
+      nextPlayer: Player | null;
       nextIndex: number;
       timerSeconds: number;
     }) => {
       soundEffects.playGavelSound();
       setTeams(data.teams);
-      setServerCurrentPlayer(data.nextPlayer);
-      setServerCurrentIndex(data.nextIndex);
-      setServerCurrentBid(data.nextPlayer.basePrice);
-      setServerLeadingTeamId(null);
-      setServerLeadingTeamName(null);
-      setServerLeadingTeamColor(null);
-      setServerTimerSeconds(data.timerSeconds);
-      setBidHistory([]);
+
+      // Show sold announcement overlay
+      setSoldAnnouncement({
+        playerName: data.soldPlayer.name,
+        teamName: data.winningTeam.name,
+        teamLogo: data.winningTeam.logo,
+        teamColor: data.winningTeam.color,
+        soldPrice: data.soldPrice,
+      });
+
+      // Clear any previous timer
+      if (soldAnnouncementTimerRef.current) {
+        clearTimeout(soldAnnouncementTimerRef.current);
+      }
+
+      // Auto-clear announcement after 4 seconds and transition to next player
+      soldAnnouncementTimerRef.current = setTimeout(() => {
+        setSoldAnnouncement(null);
+        if (data.nextPlayer) {
+          setServerCurrentPlayer(data.nextPlayer);
+          setServerCurrentIndex(data.nextIndex);
+          setServerCurrentBid(data.nextPlayer.basePrice);
+          setServerLeadingTeamId(null);
+          setServerLeadingTeamName(null);
+          setServerLeadingTeamColor(null);
+          setServerTimerSeconds(data.timerSeconds);
+          setBidHistory([]);
+        }
+      }, 4000);
 
       // Update my team purse if I won
       setMyTeam((prev) => (prev && prev.id === data.winningTeam.id ? data.winningTeam : prev));
@@ -370,6 +403,11 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     socket.emit('recirculate_unsold', { roomId });
   };
 
+  const endAuction = () => {
+    if (!socket || !roomId || !isHost) return;
+    socket.emit('end_auction', { roomId });
+  };
+
   const leaveRoom = () => {
     localStorage.removeItem('mpl_session');
     setRoomId(null);
@@ -378,6 +416,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setMyTeam(null);
     setRoomStatus('IDLE');
     setBidHistory([]);
+    setSoldAnnouncement(null);
   };
 
   const value = useMemo(
@@ -401,6 +440,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       bidHistory,
       isSubmittingBid,
       lastBidError,
+      soldAnnouncement,
       createRoom,
       joinRoom,
       joinAsSpectator,
@@ -409,6 +449,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       markSold,
       markUnsold,
       recirculateUnsold,
+      endAuction,
       leaveRoom,
     }),
     [
@@ -431,6 +472,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       bidHistory,
       isSubmittingBid,
       lastBidError,
+      soldAnnouncement,
     ]
   );
 

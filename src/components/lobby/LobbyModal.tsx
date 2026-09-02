@@ -67,8 +67,8 @@ export const LobbyModal: React.FC = () => {
     }
   };
 
-  // If already in a room and in LOBBY state: show Waiting Lobby screen
-  if (roomId && roomStatus === 'LOBBY') {
+  // If already in a room: show Waiting Lobby screen (any status)
+  if (roomId) {
     const isFull = teams.length === 6;
 
     return (

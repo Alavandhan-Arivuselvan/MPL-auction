@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Gavel, Ban, PlusCircle, AlertCircle, RefreshCw, Zap } from 'lucide-react';
+import { Gavel, Ban, PlusCircle, AlertCircle, RefreshCw, Zap, XCircle } from 'lucide-react';
 import { Team, Player } from '../../types/auction';
 import { formatINR } from '../../lib/formatters';
 import { SQUAD_LIMIT, MIN_BID_RESERVE } from '../../data/defaultData';
@@ -16,6 +16,7 @@ interface AuctioneerControlsProps {
   onMarkSold: () => void;
   onMarkUnsold: () => void;
   onRecirculateUnsold: () => void;
+  onEndAuction?: () => void;
 }
 
 export const AuctioneerControls: React.FC<AuctioneerControlsProps> = ({
@@ -30,6 +31,7 @@ export const AuctioneerControls: React.FC<AuctioneerControlsProps> = ({
   onMarkSold,
   onMarkUnsold,
   onRecirculateUnsold,
+  onEndAuction,
 }) => {
   const [customAmountInput, setCustomAmountInput] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -184,6 +186,22 @@ export const AuctioneerControls: React.FC<AuctioneerControlsProps> = ({
             >
               <RefreshCw className="w-3.5 h-3.5" />
               Recirculate ({unsoldQueueCount})
+            </button>
+          )}
+
+          {/* End Auction Button (Host only, online mode) */}
+          {onEndAuction && (
+            <button
+              onClick={() => {
+                if (window.confirm('Are you sure you want to END the auction? This will finalize all current standings.')) {
+                  onEndAuction();
+                }
+              }}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-red-500/20 text-slate-400 hover:text-red-400 border border-slate-700 hover:border-red-500/40 text-xs font-bold transition"
+              title="Force end the auction now"
+            >
+              <XCircle className="w-3.5 h-3.5" />
+              End Auction
             </button>
           )}
         </div>

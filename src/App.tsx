@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { formatINR } from './lib/formatters';
 import { SocketProvider, useSocket } from './context/SocketContext';
 import { useAuctionStore } from './store/useAuctionStore';
 import { useAuctionTimer } from './hooks/useAuctionTimer';
@@ -13,7 +14,7 @@ import { CSVUploader } from './components/setup/CSVUploader';
 import { LobbyModal } from './components/lobby/LobbyModal';
 import { MobileBidderUI } from './components/auction/MobileBidderUI';
 import { AuthScreen } from './components/auth/AuthScreen';
-import { Play, ChevronLeft, ChevronRight, Trophy, Sparkles, Wifi, Radio } from 'lucide-react';
+import { Play, ChevronLeft, ChevronRight, Trophy, Sparkles, Wifi, Radio, Gavel } from 'lucide-react';
 
 function AuctionAppContent() {
   const [currentTab, setCurrentTab] = useState<'arena' | 'setup' | 'leaderboard' | 'multiplayer'>('arena');
@@ -38,9 +39,11 @@ function AuctionAppContent() {
     markSold: socketMarkSold,
     markUnsold: socketMarkUnsold,
     recirculateUnsold: socketRecirculateUnsold,
+    endAuction: socketEndAuction,
     createRoom,
     joinRoom,
     joinAsSpectator,
+    soldAnnouncement,
   } = useSocket();
 
   // Local Auction Store selectors (for local offline mode)
@@ -261,6 +264,40 @@ function AuctionAppContent() {
                   </div>
                 )}
 
+                {/* SOLD Announcement Overlay (Host Arena View) */}
+                {soldAnnouncement && (
+                  <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
+                    <div className="text-center p-10 space-y-5 max-w-lg mx-auto">
+                      <div className="w-24 h-24 mx-auto rounded-3xl bg-emerald-500/20 border-2 border-emerald-500 flex items-center justify-center shadow-xl shadow-emerald-500/30 animate-bounce">
+                        <Gavel className="w-12 h-12 text-emerald-400" />
+                      </div>
+                      <div>
+                        <span className="px-4 py-1.5 rounded-full text-sm font-black uppercase tracking-widest bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+                          SOLD!
+                        </span>
+                      </div>
+                      <h2 className="text-3xl font-black text-white uppercase font-display tracking-wide">
+                        {soldAnnouncement.playerName}
+                      </h2>
+                      <div className="flex items-center justify-center gap-4">
+                        <span className="text-4xl">{soldAnnouncement.teamLogo}</span>
+                        <div className="text-left">
+                          <span className="text-xs text-slate-400 block">Bought by</span>
+                          <span className="text-2xl font-black" style={{ color: soldAnnouncement.teamColor }}>
+                            {soldAnnouncement.teamName}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="p-5 rounded-2xl bg-slate-900/80 border border-amber-500/40">
+                        <span className="text-[10px] uppercase font-bold tracking-widest text-slate-400 block mb-1">Sold For</span>
+                        <span className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-300 to-amber-500 font-display">
+                          {formatINR(soldAnnouncement.soldPrice)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Broadcast Layout: 12-column grid */}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                   
@@ -336,6 +373,7 @@ function AuctionAppContent() {
                       onMarkSold={isOnlineMode ? socketMarkSold : localMarkSold}
                       onMarkUnsold={isOnlineMode ? socketMarkUnsold : localMarkUnsold}
                       onRecirculateUnsold={isOnlineMode ? socketRecirculateUnsold : localRecirculateUnsold}
+                      onEndAuction={isOnlineMode && isHost ? socketEndAuction : undefined}
                     />
                   </div>
 
