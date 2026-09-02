@@ -37,9 +37,12 @@ export const LobbyModal: React.FC = () => {
   };
 
   const handleCreate = async () => {
+    if (!teamName.trim()) {
+      return setErrorMessage('Please choose a Team Name for your franchise');
+    }
     setIsLoading(true);
     setErrorMessage(null);
-    const res = await createRoom();
+    const res = await createRoom(teamName.trim(), teamLogo, teamColor);
     setIsLoading(false);
     if (!res.success) {
       setErrorMessage('Failed to create room. Ensure the server is online.');
@@ -352,6 +355,64 @@ export const LobbyModal: React.FC = () => {
             <p>• Preloaded with all 36 official players from CSV.</p>
             <p>• Controls Gavel (SOLD/UNSOLD) and Auctioneer Timer.</p>
             <p>• Supports up to 6 participant devices remotely.</p>
+          </div>
+
+          <div>
+            <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-1 text-left">
+              Admin Franchise Name
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. Admin All-Stars"
+              value={teamName}
+              onChange={(e) => setTeamName(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:outline-none focus:border-amber-400"
+              maxLength={24}
+              required
+            />
+          </div>
+
+          {/* Logo / Emoji Picker */}
+          <div>
+            <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-1 text-left">
+              Admin Mascot
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {emojiOptions.map((emoji) => (
+                <button
+                  type="button"
+                  key={emoji}
+                  onClick={() => setTeamLogo(emoji)}
+                  className={`w-9 h-9 rounded-xl text-lg flex items-center justify-center border transition ${
+                    teamLogo === emoji
+                      ? 'bg-amber-500/20 border-amber-400 scale-110'
+                      : 'bg-slate-900 border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Color Picker */}
+          <div>
+            <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-1 text-left">
+              Admin Theme Color
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {colorOptions.map((color) => (
+                <button
+                  type="button"
+                  key={color}
+                  onClick={() => setTeamColor(color)}
+                  className={`w-7 h-7 rounded-full border-2 transition ${
+                    teamColor === color ? 'border-white scale-110 shadow-lg' : 'border-transparent opacity-70'
+                  }`}
+                  style={{ backgroundColor: color }}
+                />
+              ))}
+            </div>
           </div>
 
           <button

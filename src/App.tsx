@@ -36,6 +36,7 @@ function AuctionAppContent() {
     placeBid: socketPlaceBid,
     markSold: socketMarkSold,
     markUnsold: socketMarkUnsold,
+    joinRoom,
   } = useSocket();
 
   // Local Auction Store selectors (for local offline mode)
