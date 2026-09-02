@@ -22,6 +22,7 @@ function AuctionAppContent() {
   const {
     roomId,
     isHost,
+    isSpectator,
     myTeam,
     roomStatus,
     serverCurrentPlayer,
@@ -36,8 +37,10 @@ function AuctionAppContent() {
     placeBid: socketPlaceBid,
     markSold: socketMarkSold,
     markUnsold: socketMarkUnsold,
+    recirculateUnsold: socketRecirculateUnsold,
     createRoom,
     joinRoom,
+    joinAsSpectator,
   } = useSocket();
 
   // Local Auction Store selectors (for local offline mode)
@@ -93,13 +96,22 @@ function AuctionAppContent() {
   };
 
   const handleAdminCreate = async (password: string) => {
-    // Since admin provides password, we let them pass to setup
     setAuthRole('admin');
     setCurrentTab('setup');
   };
 
+  const handleSpectatorJoin = async (roomCode: string) => {
+    const res = await joinAsSpectator(roomCode);
+    if (res.success) {
+      setAuthRole('user');
+      setCurrentTab('arena');
+    } else {
+      alert(res.message || 'Failed to join as spectator');
+    }
+  };
+
   if (!authRole && !isOnlineMode) {
-    return <AuthScreen onJoinAsUser={handleUserJoin} onHostAsHost={handleHostCreate} onCreateAsAdmin={handleAdminCreate} />;
+    return <AuthScreen onJoinAsUser={handleUserJoin} onHostAsHost={handleHostCreate} onCreateAsAdmin={handleAdminCreate} onJoinAsSpectator={handleSpectatorJoin} />;
   }
 
   // Admin Dashboard Isolation
@@ -122,8 +134,8 @@ function AuctionAppContent() {
     );
   }
 
-  // If in online room as a BIDDER (participant), display the Mobile-First Bidding UI!
-  if (isOnlineMode && !isHost && roomStatus === 'LIVE') {
+  // If in online room as a BIDDER or SPECTATOR (non-host), display the Mobile-First UI
+  if (isOnlineMode && !isHost && (roomStatus === 'LIVE' || isSpectator)) {
     return (
       <div className="min-h-screen bg-[#070b14] text-slate-100 selection:bg-amber-500 selection:text-black">
         <MobileBidderUI />
@@ -323,7 +335,7 @@ function AuctionAppContent() {
                       }}
                       onMarkSold={isOnlineMode ? socketMarkSold : localMarkSold}
                       onMarkUnsold={isOnlineMode ? socketMarkUnsold : localMarkUnsold}
-                      onRecirculateUnsold={localRecirculateUnsold}
+                      onRecirculateUnsold={isOnlineMode ? socketRecirculateUnsold : localRecirculateUnsold}
                     />
                   </div>
 

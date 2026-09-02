@@ -8,6 +8,7 @@ interface SocketContextValue {
   isConnected: boolean;
   roomId: string | null;
   isHost: boolean;
+  isSpectator: boolean;
   myTeam: Team | null;
   teams: Team[];
   roomStatus: 'IDLE' | 'LOBBY' | 'LIVE' | 'COMPLETED';
@@ -24,10 +25,12 @@ interface SocketContextValue {
   lastBidError: string | null;
   createRoom: (teamName: string, logo: string, color: string) => Promise<{ success: boolean; roomId?: string }>;
   joinRoom: (roomId: string, teamName: string, logo: string, color: string) => Promise<{ success: boolean; message?: string }>;
+  joinAsSpectator: (roomId: string) => Promise<{ success: boolean; message?: string }>;
   startAuction: () => void;
   placeBid: (amount?: number) => Promise<{ success: boolean; reason?: string }>;
   markSold: () => void;
   markUnsold: () => void;
+  recirculateUnsold: () => void;
   leaveRoom: () => void;
 }
 
@@ -47,6 +50,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [isConnected, setIsConnected] = useState(false);
   const [roomId, setRoomId] = useState<string | null>(null);
   const [isHost, setIsHost] = useState(false);
+  const [isSpectator, setIsSpectator] = useState(false);
   const [myTeam, setMyTeam] = useState<Team | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
   const [roomStatus, setRoomStatus] = useState<'IDLE' | 'LOBBY' | 'LIVE' | 'COMPLETED'>('IDLE');
@@ -101,12 +105,22 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     });
     
     newSocket.on('joined_successfully', (res: any) => {
-      if (res.success && res.roomId && res.myTeam) {
+      if (res.success && res.roomId) {
         setRoomId(res.roomId);
         setIsHost(res.isHost || false);
-        setMyTeam(res.myTeam);
+        setIsSpectator(res.isSpectator || false);
+        if (res.myTeam) setMyTeam(res.myTeam);
         if (res.teams) setTeams(res.teams);
         if (res.status) setRoomStatus(res.status);
+        // Sync live state for spectators joining mid-auction
+        if (res.isSpectator && res.status === 'LIVE') {
+          if (res.currentPlayer) setServerCurrentPlayer(res.currentPlayer);
+          if (res.currentIndex !== undefined) setServerCurrentIndex(res.currentIndex);
+          if (res.totalPlayers !== undefined) setServerTotalPlayers(res.totalPlayers);
+          if (res.currentBid !== undefined) setServerCurrentBid(res.currentBid);
+          if (res.leadingTeamId !== undefined) setServerLeadingTeamId(res.leadingTeamId);
+          if (res.timerSeconds !== undefined) setServerTimerSeconds(res.timerSeconds);
+        }
       }
     });
 
@@ -214,6 +228,28 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setTeams(data.teams);
     });
 
+    // 8. Recirculate Started (Round 2)
+    newSocket.on('recirculate_started', (data: {
+      status: 'LIVE';
+      currentPlayer: Player;
+      currentIndex: number;
+      totalPlayers: number;
+      currentBid: number;
+      leadingTeamId: string | null;
+      teams: Team[];
+      timerSeconds: number;
+    }) => {
+      setRoomStatus('LIVE');
+      setServerCurrentPlayer(data.currentPlayer);
+      setServerCurrentIndex(data.currentIndex);
+      setServerTotalPlayers(data.totalPlayers);
+      setServerCurrentBid(data.currentBid);
+      setServerLeadingTeamId(data.leadingTeamId);
+      setTeams(data.teams);
+      setServerTimerSeconds(data.timerSeconds);
+      setBidHistory([]);
+    });
+
     setSocket(newSocket);
 
     return () => {
@@ -255,12 +291,39 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           localStorage.setItem('mpl_session', JSON.stringify({ roomId: res.roomId, teamId: res.myTeam.id, isHost: false }));
           setRoomId(res.roomId);
           setIsHost(false);
+          setIsSpectator(false);
           setMyTeam(res.myTeam);
           if (res.teams) setTeams(res.teams);
           setRoomStatus('LOBBY');
           resolve({ success: true });
         } else {
           resolve({ success: false, message: res.message || 'Failed to join room' });
+        }
+      });
+    });
+  };
+
+  const joinAsSpectator = (code: string) => {
+    return new Promise<{ success: boolean; message?: string }>((resolve) => {
+      if (!socket) return resolve({ success: false, message: 'Not connected to server' });
+      socket.emit('join_room', { roomId: code, teamName: '__SPECTATOR__' }, (res: {
+        success: boolean;
+        message?: string;
+        roomId?: string;
+        isSpectator?: boolean;
+        teams?: Team[];
+        status?: string;
+      }) => {
+        if (res.success && res.roomId) {
+          setRoomId(res.roomId);
+          setIsHost(false);
+          setIsSpectator(true);
+          setMyTeam(null);
+          if (res.teams) setTeams(res.teams);
+          if (res.status) setRoomStatus(res.status as any);
+          resolve({ success: true });
+        } else {
+          resolve({ success: false, message: res.message || 'Failed to join as spectator' });
         }
       });
     });
@@ -302,10 +365,16 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     socket.emit('mark_unsold', { roomId });
   };
 
+  const recirculateUnsold = () => {
+    if (!socket || !roomId || !isHost) return;
+    socket.emit('recirculate_unsold', { roomId });
+  };
+
   const leaveRoom = () => {
     localStorage.removeItem('mpl_session');
     setRoomId(null);
     setIsHost(false);
+    setIsSpectator(false);
     setMyTeam(null);
     setRoomStatus('IDLE');
     setBidHistory([]);
@@ -317,6 +386,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       isConnected,
       roomId,
       isHost,
+      isSpectator,
       myTeam,
       teams,
       roomStatus,
@@ -333,10 +403,12 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       lastBidError,
       createRoom,
       joinRoom,
+      joinAsSpectator,
       startAuction,
       placeBid,
       markSold,
       markUnsold,
+      recirculateUnsold,
       leaveRoom,
     }),
     [
@@ -344,6 +416,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       isConnected,
       roomId,
       isHost,
+      isSpectator,
       myTeam,
       teams,
       roomStatus,

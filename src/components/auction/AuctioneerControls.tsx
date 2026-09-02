@@ -36,13 +36,19 @@ export const AuctioneerControls: React.FC<AuctioneerControlsProps> = ({
 
   if (!activePlayer) return null;
 
-  // Determine smart increments based on current bid
+  // IPL-style dynamic increments based on current bid
   const getSmartIncrements = (bid: number) => {
     if (bid < 10000000) {
       return [
         { label: '+10 Lakhs', value: 1000000 },
         { label: '+20 Lakhs', value: 2000000 },
-        { label: '+25 Lakhs', value: 2500000 },
+        { label: '+50 Lakhs', value: 5000000 },
+      ];
+    } else if (bid < 20000000) {
+      return [
+        { label: '+20 Lakhs', value: 2000000 },
+        { label: '+50 Lakhs', value: 5000000 },
+        { label: '+1.00 Cr', value: 10000000 },
       ];
     } else if (bid < 50000000) {
       return [

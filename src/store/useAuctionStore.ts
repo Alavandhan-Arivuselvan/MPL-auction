@@ -176,22 +176,24 @@ export const useAuctionStore = create<AuctionStore>()(
           return { success: false, message: `${team.name} already has maximum ${SQUAD_LIMIT} players!` };
         }
 
-        // Determine bid amount
+        // Determine bid amount using IPL-style increments
         let bidAmount = customAmount;
         if (!bidAmount) {
           if (!state.leadingTeamId) {
             // First bid starts at base price
             bidAmount = player.basePrice;
           } else {
-            // Smart increment logic
+            // IPL-style tiered increment
             const current = state.currentBid;
-            let increment = 1000000; // 10 Lakhs default
+            let increment: number;
             if (current < 10000000) {
-              increment = 1000000; // +10L
+              increment = 1000000;   // +10L up to 1 Cr
+            } else if (current < 20000000) {
+              increment = 2000000;   // +20L up to 2 Cr
             } else if (current < 50000000) {
-              increment = 2500000; // +25L
+              increment = 2500000;   // +25L up to 5 Cr
             } else {
-              increment = 5000000; // +50L
+              increment = 5000000;   // +50L above 5 Cr
             }
             bidAmount = current + increment;
           }

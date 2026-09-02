@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
-import { ShieldAlert, Users, PlusCircle, LogIn } from 'lucide-react';
+import { ShieldAlert, Users, PlusCircle, LogIn, Eye } from 'lucide-react';
 
 interface AuthScreenProps {
   onJoinAsUser: (username: string, roomCode: string, logo: string, color: string) => void;
   onHostAsHost: (teamName: string, logo: string, color: string) => void;
   onCreateAsAdmin: (password: string) => void;
+  onJoinAsSpectator?: (roomCode: string) => void;
 }
 
-export function AuthScreen({ onJoinAsUser, onHostAsHost, onCreateAsAdmin }: AuthScreenProps) {
-  const [mode, setMode] = useState<'select' | 'user' | 'host' | 'admin'>('select');
+export function AuthScreen({ onJoinAsUser, onHostAsHost, onCreateAsAdmin, onJoinAsSpectator }: AuthScreenProps) {
+  const [mode, setMode] = useState<'select' | 'user' | 'host' | 'admin' | 'spectator'>('select');
   
   // User state
   const [username, setUsername] = useState('');
@@ -105,6 +106,24 @@ export function AuthScreen({ onJoinAsUser, onHostAsHost, onCreateAsAdmin }: Auth
               </div>
               <ShieldAlert className="w-5 h-5 text-slate-500 group-hover:text-amber-400 transition-colors" />
             </button>
+
+            {onJoinAsSpectator && (
+              <button
+                onClick={() => setMode('spectator')}
+                className="w-full flex items-center justify-between p-4 rounded-2xl bg-slate-800/50 hover:bg-slate-800 border border-slate-700 hover:border-purple-500/50 transition-all group"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center">
+                    <Eye className="w-5 h-5" />
+                  </div>
+                  <div className="text-left">
+                    <div className="font-bold text-white group-hover:text-purple-400 transition-colors">Spectate Game</div>
+                    <div className="text-xs text-slate-400">Watch the auction live (Read-Only)</div>
+                  </div>
+                </div>
+                <Eye className="w-5 h-5 text-slate-500 group-hover:text-purple-400 transition-colors" />
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -294,27 +313,72 @@ export function AuthScreen({ onJoinAsUser, onHostAsHost, onCreateAsAdmin }: Auth
     );
   }
 
+  // Admin login form
+  if (mode === 'admin') {
+    return (
+      <div className="min-h-screen bg-[#070b14] flex flex-col items-center justify-center p-4">
+        <div className="max-w-md w-full glass-panel border border-amber-500/30 rounded-3xl p-8 space-y-6 shadow-2xl">
+          <div className="text-center">
+            <h2 className="text-2xl font-black text-white uppercase tracking-wider mb-2">Admin Dashboard Login</h2>
+            <p className="text-slate-400 text-sm">Enter admin password to manage game data</p>
+          </div>
+
+          <form onSubmit={handleAdminCreate} className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Password</label>
+              <input
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-amber-500 transition-colors"
+              />
+            </div>
+            
+            {error && <div className="text-red-400 text-xs font-bold text-center bg-red-400/10 py-2 rounded-lg">{error}</div>}
+            
+            <div className="pt-2 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setMode('select')}
+                className="px-4 py-3 rounded-xl bg-slate-800 text-slate-300 font-bold hover:bg-slate-700 transition"
+              >
+                Back
+              </button>
+              <button
+                type="submit"
+                className="flex-1 px-4 py-3 rounded-xl bg-amber-500 text-black font-extrabold hover:bg-amber-400 transition shadow-lg shadow-amber-500/20"
+              >
+                Login as Admin
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  // Spectator join form
   return (
     <div className="min-h-screen bg-[#070b14] flex flex-col items-center justify-center p-4">
-      <div className="max-w-md w-full glass-panel border border-amber-500/30 rounded-3xl p-8 space-y-6 shadow-2xl">
+      <div className="max-w-md w-full glass-panel border border-purple-500/30 rounded-3xl p-8 space-y-6 shadow-2xl">
         <div className="text-center">
-          <h2 className="text-2xl font-black text-white uppercase tracking-wider mb-2">Admin Dashboard Login</h2>
-          <p className="text-slate-400 text-sm">Enter admin password to manage game data</p>
+          <h2 className="text-2xl font-black text-white uppercase tracking-wider mb-2">Spectate Auction</h2>
+          <p className="text-slate-400 text-sm">Enter the room code to watch the auction live</p>
         </div>
 
-        <form onSubmit={handleAdminCreate} className="space-y-4">
+        <form onSubmit={(e) => { e.preventDefault(); if (roomCode.trim() && onJoinAsSpectator) onJoinAsSpectator(roomCode); }} className="space-y-4">
           <div>
-            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Password</label>
+            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Room Code</label>
             <input
-              type="password"
+              type="text"
               required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-amber-500 transition-colors"
+              value={roomCode}
+              onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
+              placeholder="MPL-XXXX"
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500 transition-colors font-mono uppercase"
             />
           </div>
-          
-          {error && <div className="text-red-400 text-xs font-bold text-center bg-red-400/10 py-2 rounded-lg">{error}</div>}
           
           <div className="pt-2 flex gap-3">
             <button
@@ -326,9 +390,9 @@ export function AuthScreen({ onJoinAsUser, onHostAsHost, onCreateAsAdmin }: Auth
             </button>
             <button
               type="submit"
-              className="flex-1 px-4 py-3 rounded-xl bg-amber-500 text-black font-extrabold hover:bg-amber-400 transition shadow-lg shadow-amber-500/20"
+              className="flex-1 px-4 py-3 rounded-xl bg-purple-500 text-white font-extrabold hover:bg-purple-400 transition shadow-lg shadow-purple-500/20"
             >
-              Login as Admin
+              👁️ Spectate
             </button>
           </div>
         </form>

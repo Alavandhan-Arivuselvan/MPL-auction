@@ -64,6 +64,14 @@ const INITIAL_PURSE = 600000000; // ₹60 Cr
 const SQUAD_LIMIT = 6;
 const MIN_RESERVE_PER_SLOT = 2500000; // ₹25 Lakhs
 
+// IPL-style auto-increment tiers
+function getIPLIncrement(currentBid) {
+  if (currentBid < 10000000) return 1000000;    // +10L up to 1 Cr
+  if (currentBid < 20000000) return 2000000;     // +20L up to 2 Cr
+  if (currentBid < 50000000) return 2500000;     // +25L up to 5 Cr
+  return 5000000;                                // +50L above 5 Cr
+}
+
 // Rooms State Map
 const rooms = new Map();
 
@@ -310,6 +318,38 @@ io.on('connection', (socket) => {
       }
     }
 
+    // Handle Spectator join
+    if (teamName === '__SPECTATOR__' || !teamName) {
+      // If no teamName or explicitly spectator, join as read-only spectator
+      if (teamName === '__SPECTATOR__') {
+        socket.join(cleanRoomId);
+        socket.data = { roomId: cleanRoomId, teamId: null, isHost: false, isSpectator: true };
+
+        console.log(`[Spectator Joined] ${socket.id} spectating room ${cleanRoomId}`);
+
+        const spectatorPayload = {
+          success: true,
+          roomId: cleanRoomId,
+          myTeam: null,
+          teams: room.teams,
+          status: room.status,
+          isHost: false,
+          isSpectator: true,
+          // If auction is live, send current state
+          currentPlayer: room.status === 'LIVE' ? room.players[room.currentPlayerIndex] : null,
+          currentIndex: room.currentPlayerIndex,
+          totalPlayers: room.players.length,
+          currentBid: room.currentBid,
+          leadingTeamId: room.leadingTeamId,
+          timerSeconds: room.timerSeconds,
+        };
+
+        if (typeof callback === 'function') callback(spectatorPayload);
+        socket.emit('joined_successfully', spectatorPayload);
+        return;
+      }
+    }
+
     if (room.teams.length >= 6) {
       const err = { success: false, message: 'Room is already full! Maximum 6 teams permitted.' };
       if (typeof callback === 'function') callback(err);
@@ -430,15 +470,13 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // Determine target bid amount
+    // Determine target bid amount using IPL-style increments
     let targetAmount = amount;
     if (!targetAmount) {
       if (!room.leadingTeamId) {
         targetAmount = activePlayer.basePrice;
       } else {
-        const cur = room.currentBid;
-        const inc = cur < 10000000 ? 1000000 : cur < 50000000 ? 2500000 : 5000000;
-        targetAmount = cur + inc;
+        targetAmount = room.currentBid + getIPLIncrement(room.currentBid);
       }
     }
 
@@ -515,7 +553,59 @@ io.on('connection', (socket) => {
     if (typeof callback === 'function') callback({ success: true });
   });
 
-  // 7. DISCONNECT HANDLER
+  // 7. HOST RECIRCULATES UNSOLD PLAYERS (Round 2)
+  socket.on('recirculate_unsold', ({ roomId }, callback) => {
+    const room = rooms.get(roomId);
+    if (!room) return;
+
+    if (room.unsoldQueue.length === 0) {
+      if (typeof callback === 'function') callback({ success: false, reason: 'No unsold players to recirculate.' });
+      return;
+    }
+
+    console.log(`[Recirculate] Starting Round 2 with ${room.unsoldQueue.length} unsold players in room ${roomId}`);
+
+    // Reset unsold players in the main roster with halved base prices
+    const unsoldIds = new Set(room.unsoldQueue.map(p => p.id));
+    room.players.forEach(p => {
+      if (unsoldIds.has(p.id)) {
+        p.isUnsold = false;
+        p.basePrice = Math.max(2500000, Math.round(p.basePrice * 0.5)); // 50% discount, min 25L
+      }
+    });
+
+    // Find first recirculated player
+    const firstIdx = room.players.findIndex(p => unsoldIds.has(p.id));
+    if (firstIdx === -1) {
+      if (typeof callback === 'function') callback({ success: false, reason: 'Could not find unsold players.' });
+      return;
+    }
+
+    room.unsoldQueue = [];
+    room.currentPlayerIndex = firstIdx;
+    room.currentBid = room.players[firstIdx].basePrice;
+    room.leadingTeamId = null;
+    room.bidHistory = [];
+    room.status = 'LIVE';
+
+    startRoomTimer(room);
+
+    const syncPayload = {
+      status: 'LIVE',
+      currentPlayer: room.players[firstIdx],
+      currentIndex: firstIdx,
+      totalPlayers: room.players.length,
+      currentBid: room.currentBid,
+      leadingTeamId: null,
+      teams: room.teams,
+      timerSeconds: 20,
+    };
+
+    io.to(roomId).emit('recirculate_started', syncPayload);
+    if (typeof callback === 'function') callback({ success: true });
+  });
+
+  // 8. DISCONNECT HANDLER
   socket.on('disconnect', () => {
     console.log(`[Socket Disconnected] ${socket.id}`);
     
